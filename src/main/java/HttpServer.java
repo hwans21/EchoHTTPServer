@@ -4,12 +4,19 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.*;
-import io.netty.handler.ssl.SslContext;
-import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslHandler;
 
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLException;
+import javax.net.ssl.TrustManagerFactory;
+import java.io.ByteArrayInputStream;
 import java.io.File;
+import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.nio.file.Files;
+import java.security.KeyStore;
+import java.security.Security;
 
 public class HttpServer {
     public static void main(String[] args) throws Exception {
@@ -38,9 +45,10 @@ public class HttpServer {
                     @Override
                     protected void initChannel(SocketChannel ch) throws Exception {
                         if(HTTPOption.equalsIgnoreCase("HTTPS")){
-                            SslContext sslCtx = getCertificate();
+                            SSLContext sslCtx = getCertificate();
                             if (sslCtx != null) {
-                                ch.pipeline().addLast(sslCtx.newHandler(ch.alloc()));
+                                final SslHandler sslHandler =new SslHandler(sslCtx.createSSLEngine());
+                                ch.pipeline().addLast("ssl",sslHandler);
                             }
                         }
                         //HttpServerCodec is a helper ChildHandler that encompasses
@@ -72,18 +80,39 @@ public class HttpServer {
         // Start the server & bind to a random port.
         return b.bind();
     }
-    private static SslContext getCertificate() throws SSLException {
-        SslContext sslContext;
-        try{
-            File cert = new File("./keyfile/netty.crt");
-            File key = new File("privatekey.pem");
-            sslContext = SslContextBuilder.forServer(cert, key).build();
-        }catch(Exception e){
-            e.printStackTrace();
-            System.out.println("Certification or Key path is null");
-            sslContext = null;
-        }
-        return sslContext;
+    private static SSLContext getCertificate() throws SSLException {
 
+        SSLContext sslContext = null;
+        KeyStore ks = null;
+        ByteArrayInputStream bsi =null;
+
+        try {
+            ks = KeyStore.getInstance("JKS");
+            sslContext = SSLContext.getInstance("TLSv1.1");
+            File file = new File("../certs/test.jks");
+            byte[] temp = Files.readAllBytes(file.toPath());
+            bsi = new ByteArrayInputStream(temp);
+            ks.load(bsi,"test1234".toCharArray());
+            String algorithm = Security.getProperty("ssl.KeyManagerFactory.algorithm");
+            final KeyManagerFactory kmf = KeyManagerFactory.getInstance(algorithm);
+            kmf.init(ks, "test1234".toCharArray());
+            TrustManagerFactory tmf = TrustManagerFactory.getInstance(algorithm);
+            tmf.init(ks);
+            sslContext.init(kmf.getKeyManagers(), tmf.getTrustManagers(),null);
+
+        }catch (Exception e){
+            e.printStackTrace();
+        } finally {
+            try {
+                bsi.close();
+            } catch (IOException e) {
+
+            }
+        }
+
+
+
+
+        return sslContext;
     }
 }
