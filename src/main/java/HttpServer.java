@@ -5,6 +5,7 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.*;
 import io.netty.handler.ssl.SslHandler;
+import io.netty.util.CharsetUtil;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -51,26 +52,22 @@ public class HttpServer {
                                 ch.pipeline().addLast("ssl",sslHandler);
                             }
                         }
-                        //HttpServerCodec is a helper ChildHandler that encompasses
-                        //both HTTP request decoding and HTTP response encoding
+
                         ch.pipeline().addLast(new HttpServerCodec());
-                        //HttpObjectAggregator helps collect chunked HttpRequest pieces into
-                        //a single FullHttpRequest. If you don't make use of streaming, this is
-                        //much simpler to work with.
+
                         ch.pipeline().addLast(new HttpObjectAggregator(1048576));
-                        //Finally add your FullHttpRequest handler. Real examples might replace this
-                        //with a request router
+
                         ch.pipeline().addLast(new SimpleChannelInboundHandler<FullHttpRequest>() {
                             @Override
                             public void channelReadComplete(ChannelHandlerContext ctx) throws Exception {
                                 ctx.flush();
-                                //The close is important here in an HTTP request as it sets the Content-Length of a
-                                //response body back to the client.
+
                                 ctx.close();
                             }
                             @Override
                             protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) throws Exception {
                                 DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK, msg.content().copy());
+                                System.out.println(msg.content().toString(CharsetUtil.UTF_8));
                                 ctx.write(response);
                             }
                         });
